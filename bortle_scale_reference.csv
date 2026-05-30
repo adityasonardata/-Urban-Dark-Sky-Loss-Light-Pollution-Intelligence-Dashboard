@@ -1,0 +1,10 @@
+Bortle_Class,Class_Name,Sky_Description,SQM_Range_Low,SQM_Range_High,Milky_Way_Visibility,Typical_Location,Color_Code
+1,Exceptional Dark Sky,Truly dark sky with naked-eye zodiacal light,22.0,22.0,Stunning with structure,Remote wilderness,#000033
+2,Truly Dark Sky,Faint airglow on horizon,21.5,21.9,Striking with dark lanes,Rural wilderness,#001a66
+3,Rural Sky,Slight light pollution on horizon,21.0,21.4,Impressive,Remote rural,#003399
+4,Rural/Suburban Transition,Whitish glow over populated areas,20.4,20.9,Visible and obvious,Rural,#0055cc
+5,Suburban Sky,Lower Milky Way visible,19.1,20.3,Clearly visible,Suburban outskirts,#3377ff
+6,Bright Suburban Sky,Milky Way faint,18.0,19.0,Washed out,Suburban,#6699ff
+7,Suburban/Urban Transition,Milky Way invisible,16.0,17.9,Invisible,Urban edge,#ffcc00
+8,City Sky,200-300 stars visible,14.0,15.9,Absent,Urban,#ff8800
+9,Inner City Sky,Only brightest stars visible,0.0,13.9,Absent,City center,#ff3300
