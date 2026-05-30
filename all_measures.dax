@@ -1,0 +1,488 @@
+// =============================================================
+// DARK SKY LOSS & LIGHT POLLUTION DASHBOARD — DAX MEASURES
+// Project: Urban Night Sky Quality Intelligence System
+// Author: [Your Name]
+// Last Updated: 2024
+// =============================================================
+
+// ─────────────────────────────────────────────────
+// TABLE: RELATIONSHIPS (set in Power BI Model View)
+// ─────────────────────────────────────────────────
+// city_light_pollution[City] → wildlife_impact[City]         (Many-to-Many via City+Year)
+// city_light_pollution[City] → dark_sky_initiatives[City]    (Many-to-Many via City+Year)
+// city_light_pollution[Bortle_Class] → bortle_scale_reference[Bortle_Class] (Many-to-One)
+// Recommend: Create a Date table and relate on [Year]
+
+
+// ─────────────────────────────────────────────────
+// SECTION 1: CALCULATED COLUMNS
+// ─────────────────────────────────────────────────
+
+// Column: Pollution Severity Band (city_light_pollution table)
+Pollution_Severity_Band =
+SWITCH(
+    TRUE(),
+    city_light_pollution[Bortle_Class] >= 9,  "🔴 Extreme (Class 9)",
+    city_light_pollution[Bortle_Class] = 8,   "🟠 Severe (Class 8)",
+    city_light_pollution[Bortle_Class] = 7,   "🟡 High (Class 7)",
+    city_light_pollution[Bortle_Class] = 6,   "🟢 Moderate (Class 6)",
+    city_light_pollution[Bortle_Class] <= 5,  "🔵 Low/Good (Class ≤5)",
+    "Unknown"
+)
+
+// Column: Stars Lost vs Dark Sky Benchmark (city_light_pollution table)
+Stars_Lost_vs_Benchmark =
+// Benchmark: Class 1 dark sky = ~4500 stars visible
+4500 - city_light_pollution[Visible_Stars_Count]
+
+// Column: Annual CO2 per Capita from Light Waste
+CO2_Per_Capita_kg =
+DIVIDE(
+    city_light_pollution[CO2_Emission_LightWaste_tons] * 1000,
+    city_light_pollution[Population_Million] * 1000000
+)
+
+// Column: Night Sky Quality Index (normalized 0–10)
+NSQI_Score =
+DIVIDE(
+    city_light_pollution[SQM_Value] - 7,
+    22 - 7
+) * 10
+
+// Column: LED Efficiency Tier (dark_sky_initiatives table)
+LED_Tier =
+SWITCH(
+    TRUE(),
+    dark_sky_initiatives[LED_Conversion_Pct] >= 80, "Platinum",
+    dark_sky_initiatives[LED_Conversion_Pct] >= 60, "Gold",
+    dark_sky_initiatives[LED_Conversion_Pct] >= 40, "Silver",
+    dark_sky_initiatives[LED_Conversion_Pct] >= 20, "Bronze",
+    "Unranked"
+)
+
+// Column: Initiative Effectiveness Score
+Initiative_Effectiveness =
+(dark_sky_initiatives[LED_Conversion_Pct] * 0.3)
++ (dark_sky_initiatives[Energy_Saved_GWh] / 100 * 0.3)
++ (dark_sky_initiatives[SQM_Improvement] * 5 * 0.2)
++ (dark_sky_initiatives[Public_Awareness_Score] * 10 * 0.2)
+
+
+// ─────────────────────────────────────────────────
+// SECTION 2: DATE TABLE (create as calculated table)
+// ─────────────────────────────────────────────────
+
+Date_Table =
+ADDCOLUMNS(
+    GENERATESERIES(2018, 2023, 1),
+    "Year", [Value],
+    "Year_Label", "FY " & [Value],
+    "Decade", IF([Value] < 2020, "2018–2019", "2020–2023"),
+    "Period", IF([Value] <= 2019, "Pre-Pandemic", IF([Value] = 2020, "Pandemic Year", "Post-Pandemic"))
+)
+
+
+// ─────────────────────────────────────────────────
+// SECTION 3: CORE KPI MEASURES
+// ─────────────────────────────────────────────────
+
+// Total Cities Monitored
+[Total Cities] =
+DISTINCTCOUNT(city_light_pollution[City])
+
+// Average Sky Quality (SQM)
+[Avg SQM Score] =
+AVERAGE(city_light_pollution[SQM_Value])
+
+// Average Bortle Class
+[Avg Bortle Class] =
+AVERAGE(city_light_pollution[Bortle_Class])
+
+// Average Visible Stars
+[Avg Visible Stars] =
+AVERAGE(city_light_pollution[Visible_Stars_Count])
+
+// Total Energy Waste (GWh)
+[Total Energy Waste GWh] =
+SUM(city_light_pollution[Energy_Waste_GWh])
+
+// Total CO2 from Light Waste (tons)
+[Total CO2 Light Waste Tons] =
+SUM(city_light_pollution[CO2_Emission_LightWaste_tons])
+
+// % Cities with Milky Way Invisible
+[Pct Cities No Milky Way] =
+DIVIDE(
+    CALCULATE(
+        DISTINCTCOUNT(city_light_pollution[City]),
+        city_light_pollution[Milky_Way_Visible] = "No"
+    ),
+    DISTINCTCOUNT(city_light_pollution[City])
+) * 100
+
+// Average Night Sky Quality Index (normalized)
+[Avg NSQI] =
+AVERAGEX(
+    city_light_pollution,
+    DIVIDE(city_light_pollution[SQM_Value] - 7, 22 - 7) * 10
+)
+
+// Total Annual Bird Collision Deaths
+[Total Bird Deaths] =
+SUM(wildlife_impact[Bird_Collision_Deaths_Annual])
+
+// Average Wildlife Impact Score
+[Avg Wildlife Impact Score] =
+AVERAGE(wildlife_impact[Wildlife_Impact_Score])
+
+// Cities with Dark Sky Policy
+[Cities with Dark Sky Policy] =
+CALCULATE(
+    DISTINCTCOUNT(dark_sky_initiatives[City]),
+    dark_sky_initiatives[Dark_Sky_Policy_Enacted] = "Yes"
+)
+
+// Policy Adoption Rate
+[Policy Adoption Rate Pct] =
+DIVIDE(
+    [Cities with Dark Sky Policy],
+    DISTINCTCOUNT(dark_sky_initiatives[City])
+) * 100
+
+// Total Energy Saved by Initiatives (GWh)
+[Total Energy Saved GWh] =
+SUM(dark_sky_initiatives[Energy_Saved_GWh])
+
+// Total Cost Saved by Initiatives (USD Million)
+[Total Cost Saved USD M] =
+SUM(dark_sky_initiatives[Cost_Saved_USD_Million])
+
+// Average LED Conversion %
+[Avg LED Conversion Pct] =
+AVERAGE(dark_sky_initiatives[LED_Conversion_Pct])
+
+
+// ─────────────────────────────────────────────────
+// SECTION 4: TIME INTELLIGENCE MEASURES
+// ─────────────────────────────────────────────────
+
+// Year-over-Year SQM Change
+[SQM YoY Change] =
+VAR CurrentYear = MAX(city_light_pollution[Year])
+VAR CurrentSQM = CALCULATE([Avg SQM Score], city_light_pollution[Year] = CurrentYear)
+VAR PriorSQM   = CALCULATE([Avg SQM Score], city_light_pollution[Year] = CurrentYear - 1)
+RETURN
+    IF(
+        NOT ISBLANK(PriorSQM),
+        CurrentSQM - PriorSQM,
+        BLANK()
+    )
+
+// SQM YoY % Change
+[SQM YoY Pct Change] =
+DIVIDE([SQM YoY Change], [Avg SQM Score] - [SQM YoY Change]) * 100
+
+// Running Average SQM (cumulative)
+[Running Avg SQM] =
+CALCULATE(
+    [Avg SQM Score],
+    FILTER(
+        ALL(city_light_pollution[Year]),
+        city_light_pollution[Year] <= MAX(city_light_pollution[Year])
+    )
+)
+
+// Energy Waste YoY Change
+[Energy Waste YoY Change GWh] =
+VAR CY = MAX(city_light_pollution[Year])
+VAR CVal = CALCULATE([Total Energy Waste GWh], city_light_pollution[Year] = CY)
+VAR PVal = CALCULATE([Total Energy Waste GWh], city_light_pollution[Year] = CY - 1)
+RETURN IF(NOT ISBLANK(PVal), CVal - PVal, BLANK())
+
+// Bird Deaths YoY Change
+[Bird Deaths YoY Change] =
+VAR CY = MAX(wildlife_impact[Year])
+VAR CV = CALCULATE([Total Bird Deaths], wildlife_impact[Year] = CY)
+VAR PV = CALCULATE([Total Bird Deaths], wildlife_impact[Year] = CY - 1)
+RETURN IF(NOT ISBLANK(PV), CV - PV, BLANK())
+
+// Cumulative CO2 from Light Waste
+[Cumulative CO2 Tons] =
+CALCULATE(
+    [Total CO2 Light Waste Tons],
+    FILTER(
+        ALL(city_light_pollution[Year]),
+        city_light_pollution[Year] <= MAX(city_light_pollution[Year])
+    )
+)
+
+// LED Progress since 2018 (absolute gain)
+[LED Conversion Progress Since 2018] =
+VAR Base2018 = CALCULATE([Avg LED Conversion Pct], dark_sky_initiatives[Year] = 2018)
+RETURN [Avg LED Conversion Pct] - Base2018
+
+
+// ─────────────────────────────────────────────────
+// SECTION 5: RANKING & COMPARISON MEASURES
+// ─────────────────────────────────────────────────
+
+// Rank: Worst Light Pollution (highest Artificial Brightness)
+[Rank Worst Pollution] =
+RANKX(
+    ALL(city_light_pollution[City]),
+    CALCULATE(AVERAGE(city_light_pollution[Artificial_Sky_Brightness_mcd_m2])),
+    ,
+    DESC,
+    SKIP
+)
+
+// Rank: Best Sky Quality (highest SQM)
+[Rank Best Sky Quality] =
+RANKX(
+    ALL(city_light_pollution[City]),
+    CALCULATE([Avg SQM Score]),
+    ,
+    DESC,
+    SKIP
+)
+
+// Rank: Most Wildlife Impact
+[Rank Wildlife Impact] =
+RANKX(
+    ALL(wildlife_impact[City]),
+    CALCULATE([Avg Wildlife Impact Score]),
+    ,
+    DESC,
+    SKIP
+)
+
+// Rank: Best Initiative City (by LED + Energy Saved)
+[Rank Initiative Leader] =
+RANKX(
+    ALL(dark_sky_initiatives[City]),
+    CALCULATE(
+        AVERAGE(dark_sky_initiatives[LED_Conversion_Pct]) * 0.5
+        + AVERAGE(dark_sky_initiatives[Energy_Saved_GWh]) / 200 * 0.5
+    ),
+    ,
+    DESC,
+    SKIP
+)
+
+// Top 5 Worst Pollution Cities Flag
+[Is Top 5 Worst Pollution] =
+IF([Rank Worst Pollution] <= 5, "Top 5 Worst", "Others")
+
+// City vs Global Average SQM
+[SQM vs Global Avg] =
+[Avg SQM Score]
+- CALCULATE([Avg SQM Score], ALL(city_light_pollution[City]))
+
+// City vs Global Avg (Label)
+[SQM vs Global Label] =
+IF(
+    [SQM vs Global Avg] >= 0,
+    "+" & FORMAT([SQM vs Global Avg], "0.00") & " above avg",
+    FORMAT([SQM vs Global Avg], "0.00") & " below avg"
+)
+
+
+// ─────────────────────────────────────────────────
+// SECTION 6: CONDITIONAL FORMATTING MEASURES
+// ─────────────────────────────────────────────────
+
+// Color: SQM Score (green = good, red = bad)
+[SQM Color HEX] =
+SWITCH(
+    TRUE(),
+    [Avg SQM Score] >= 18, "#00B050",   -- Dark green: excellent
+    [Avg SQM Score] >= 14, "#92D050",   -- Light green: good
+    [Avg SQM Score] >= 10, "#FFEB84",   -- Yellow: moderate
+    [Avg SQM Score] >= 8,  "#FF8C00",   -- Orange: poor
+    "#FF0000"                            -- Red: extreme
+)
+
+// Color: Wildlife Impact Score
+[Wildlife Color HEX] =
+SWITCH(
+    TRUE(),
+    [Avg Wildlife Impact Score] <= 2,  "#00B050",
+    [Avg Wildlife Impact Score] <= 4,  "#92D050",
+    [Avg Wildlife Impact Score] <= 6,  "#FFEB84",
+    [Avg Wildlife Impact Score] <= 8,  "#FF8C00",
+    "#FF0000"
+)
+
+// KPI Status: SQM Trend
+[SQM KPI Status] =
+IF(
+    [SQM YoY Change] > 0, 1,   -- Improving (green)
+    IF([SQM YoY Change] < 0, -1, 0)  -- Worsening (red) / Neutral
+)
+
+// Icon: Policy Enacted
+[Policy Icon] =
+IF(
+    CALCULATE(
+        MAX(dark_sky_initiatives[Dark_Sky_Policy_Enacted]),
+        dark_sky_initiatives[Year] = MAX(dark_sky_initiatives[Year])
+    ) = "Yes",
+    "✅ Policy Active",
+    "❌ No Policy"
+)
+
+
+// ─────────────────────────────────────────────────
+// SECTION 7: ADVANCED ANALYTICS MEASURES
+// ─────────────────────────────────────────────────
+
+// Composite Dark Sky Health Index (0–100, higher = better sky)
+[Dark Sky Health Index] =
+VAR SQM_Weight   = DIVIDE([Avg SQM Score], 22) * 35        // 35% weight
+VAR Stars_Weight = DIVIDE([Avg Visible Stars], 4500) * 25  // 25% weight
+VAR Wildlife_W   = (10 - [Avg Wildlife Impact Score]) / 10 * 20 // 20% weight
+VAR Policy_W     = DIVIDE([Policy Adoption Rate Pct], 100) * 10 // 10% weight
+VAR LED_W        = DIVIDE([Avg LED Conversion Pct], 100) * 10   // 10% weight
+RETURN
+    (SQM_Weight + Stars_Weight + Wildlife_W + Policy_W + LED_W) * 100
+
+// Recovery Potential Score (higher = can improve more)
+[Recovery Potential Score] =
+100 - [Dark Sky Health Index]
+
+// Energy ROI of Dark Sky Initiatives
+[Initiative Energy ROI] =
+DIVIDE(
+    [Total Energy Saved GWh],
+    CALCULATE(
+        SUM(dark_sky_initiatives[Budget_Allocated_USD_Million]),
+        dark_sky_initiatives[Dark_Sky_Policy_Enacted] = "Yes"
+    )
+)
+
+// Correlation Proxy: Population vs SQM (higher pop = worse sky)
+[Pop vs SQM Correlation Insight] =
+VAR AvgPop = AVERAGE(city_light_pollution[Population_Million])
+VAR AvgSQM = [Avg SQM Score]
+RETURN
+    "Pop: " & FORMAT(AvgPop, "0.0") & "M | SQM: " & FORMAT(AvgSQM, "0.00")
+
+// Estimated Stars Recovered if LED Policy Implemented
+[Projected Stars if Full LED] =
+VAR CurrentStars = [Avg Visible Stars]
+VAR ImprovementFactor = 1.25  // ~25% improvement with full LED + shielding
+RETURN
+    ROUND(CurrentStars * ImprovementFactor, 0)
+
+// Light Pollution Intensity per Capita (mcd/m2 per person)
+[Brightness Per Capita] =
+DIVIDE(
+    AVERAGE(city_light_pollution[Artificial_Sky_Brightness_mcd_m2]),
+    AVERAGE(city_light_pollution[Population_Million]) * 1000000
+) * 1000000  // scale to per million people
+
+// Carbon Footprint: Light Waste per km2 (proxy using population density)
+[CO2 Density Score] =
+DIVIDE(
+    [Total CO2 Light Waste Tons],
+    [Total Cities]
+)
+
+// Insect Decline Risk Score (combined measure)
+[Insect Decline Risk] =
+AVERAGEX(
+    wildlife_impact,
+    wildlife_impact[Insect_Decline_Pct] * wildlife_impact[Wildlife_Impact_Score] / 10
+)
+
+// Sea Turtle Threat Index
+[Sea Turtle Threat Index] =
+CALCULATE(
+    AVERAGEX(
+        wildlife_impact,
+        wildlife_impact[Sea_Turtle_Disorientation_Pct]
+    ),
+    wildlife_impact[Sea_Turtle_Disorientation_Pct] > 0
+)
+
+
+// ─────────────────────────────────────────────────
+// SECTION 8: DYNAMIC TITLE / LABEL MEASURES
+// ─────────────────────────────────────────────────
+
+// Dynamic Page Title with Year
+[Dynamic Year Title] =
+"Light Pollution Analysis — " & MAX(city_light_pollution[Year])
+
+// Selected City + Year Summary
+[City Year Summary] =
+VAR SelectedCity = SELECTEDVALUE(city_light_pollution[City], "All Cities")
+VAR SelectedYear = SELECTEDVALUE(city_light_pollution[Year], MAX(city_light_pollution[Year]))
+RETURN
+    SelectedCity & " | " & SelectedYear
+
+// KPI Card: SQM with Classification
+[SQM Card Display] =
+VAR SQM = ROUND([Avg SQM Score], 1)
+VAR Class =
+    SWITCH(
+        TRUE(),
+        SQM >= 21.5, "Truly Dark",
+        SQM >= 20.0, "Rural",
+        SQM >= 18.0, "Suburban",
+        SQM >= 14.0, "Urban",
+        "Inner City"
+    )
+RETURN FORMAT(SQM, "0.0") & " (" & Class & ")"
+
+// Pollution Load Summary
+[Pollution Load Summary] =
+"Avg Brightness: " & FORMAT(AVERAGE(city_light_pollution[Artificial_Sky_Brightness_mcd_m2]), "#,##0")
+& " mcd/m² | CO₂: " & FORMAT([Total CO2 Light Waste Tons] / 1000, "#,##0") & "K tons"
+
+
+// ─────────────────────────────────────────────────
+// SECTION 9: WHAT-IF SCENARIO MEASURES
+// (Requires: LED_Conversion_Parm = New Parameter table with 0–100 range)
+// ─────────────────────────────────────────────────
+
+// Scenario: Projected Energy Savings at Target LED %
+[Scenario Energy Saved GWh] =
+VAR TargetLED = 'LED_Conversion_Parm'[LED_Conversion_Parm Value]
+VAR CurrentLED = [Avg LED Conversion Pct]
+VAR CurrentEnergySaved = [Total Energy Saved GWh]
+RETURN
+    IF(
+        TargetLED > CurrentLED,
+        CurrentEnergySaved * (TargetLED / MAX(CurrentLED, 1)),
+        CurrentEnergySaved
+    )
+
+// Scenario: SQM Improvement at Target LED
+[Scenario SQM Projected] =
+VAR TargetLED = 'LED_Conversion_Parm'[LED_Conversion_Parm Value]
+VAR ImprovementPerPct = 0.015  // ~0.015 SQM gain per % LED conversion
+RETURN
+    [Avg SQM Score] + ((TargetLED - [Avg LED Conversion Pct]) * ImprovementPerPct)
+
+// Scenario: Projected Stars Visible at Target LED
+[Scenario Stars Projected] =
+VAR SQMProjected = [Scenario SQM Projected]
+VAR StarsPerSQM  = 150  // approx stars gained per 1.0 SQM improvement
+RETURN
+    MAX([Avg Visible Stars], [Avg Visible Stars] + (SQMProjected - [Avg SQM Score]) * StarsPerSQM)
+
+
+// ─────────────────────────────────────────────────
+// END OF DAX FILE
+// =============================================================
+// NOTES:
+// 1. Import all 4 CSV files into Power BI Desktop
+// 2. In Model View, set relationships as described at top
+// 3. Create Date_Table as a calculated table using the formula above
+// 4. Paste measures into respective tables (group by section)
+// 5. For What-If measures, first create a Parameter via:
+//    Modeling > New Parameter > Name: LED_Conversion_Parm, Range 0–100
+// 6. Use Conditional Formatting measures in Table/Matrix visuals
+//    via Format > Conditional Formatting > Field Value
+// =============================================================
