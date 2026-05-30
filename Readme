@@ -1,0 +1,234 @@
+🌌 Urban Dark Sky Loss & Light Pollution Intelligence Dashboard
+
+> A Power BI end-to-end analytics project tracking light pollution, sky quality degradation, wildlife disruption, and dark sky recovery initiatives across 13 global cities (2018–2023).
+
+
+
+ 📌 Why This Project?
+
+Over 80% of the world's population now lives under light-polluted skies. This project quantifies that crisis — translating sky brightness readings, Bortle classifications, wildlife mortality data, and city-level policy actions into a single intelligence dashboard.
+
+This is **not a sales or finance dashboard**. It uses real-world scientific metrics (SQM, mcd/m², Bortle class) that demonstrate domain knowledge in environmental analytics, a growing field in ESG reporting and sustainability consulting.
+
+## 🗂️ Project Structure
+
+```
+lightpollution-powerbi/
+│
+├── data/
+│   ├── city_light_pollution.csv        # Core dataset: SQM, Bortle, energy, CO₂
+│   ├── wildlife_impact.csv             # Bird deaths, insect decline, sea turtle disruption
+│   ├── dark_sky_initiatives.csv        # LED conversion %, policy status, energy saved
+│   └── bortle_scale_reference.csv      # Lookup table: Bortle classes 1–9
+│
+├── dax/
+│   └── all_measures.dax                # All DAX: columns, measures, time intelligence, scenarios
+│
+├── dashboard/
+│   └── dashboard_preview.png           # Dashboard screenshot for GitHub README
+│
+└── README.md                           # This file
+```
+
+---
+
+## 🔢 Data Dictionary
+
+### `city_light_pollution.csv`
+| Column | Type | Description |
+|---|---|---|
+| City, Country, Region | Text | Location identifiers |
+| Latitude, Longitude | Decimal | Geographic coordinates |
+| Year | Integer | Observation year (2018–2023) |
+| Population_Million | Decimal | City population in millions |
+| SQM_Value | Decimal | Sky Quality Meter reading (higher = darker sky; max ~22.0) |
+| Bortle_Class | Integer | 1 (best) to 9 (worst) sky darkness classification |
+| Artificial_Sky_Brightness_mcd_m2 | Decimal | Measured sky brightness in millicandela per m² |
+| Visible_Stars_Count | Integer | Estimated naked-eye stars visible |
+| Milky_Way_Visible | Text | Yes / Partial / No |
+| Energy_Waste_GWh | Decimal | Estimated energy wasted on excess lighting |
+| CO2_Emission_LightWaste_tons | Decimal | CO₂ equivalent from wasted light energy |
+| Night_Sky_Quality_Score | Decimal | Normalized quality score (1–10) |
+| Light_Pollution_Category | Text | Extreme / Severe / High / Moderate / Low |
+
+### `wildlife_impact.csv`
+| Column | Type | Description |
+|---|---|---|
+| Bird_Collision_Deaths_Annual | Integer | Annual bird building collision deaths |
+| Sea_Turtle_Disorientation_Pct | Decimal | % of sea turtles disoriented by coastal light |
+| Insect_Decline_Pct | Decimal | Estimated % insect population decline due to light |
+| Bat_Activity_Reduction_Pct | Decimal | Reduction in bat foraging activity |
+| Wildlife_Impact_Score | Decimal | Composite impact score (0–10) |
+
+### `dark_sky_initiatives.csv`
+| Column | Type | Description |
+|---|---|---|
+| LED_Conversion_Pct | Decimal | % of street lights converted to LED |
+| Curfew_Lighting_Hours | Integer | Hours per night with reduced lighting |
+| Dark_Sky_Policy_Enacted | Text | Yes / No |
+| Budget_Allocated_USD_Million | Decimal | Initiative budget in USD millions |
+| Energy_Saved_GWh | Decimal | GWh saved through initiatives |
+| SQM_Improvement | Decimal | Sky quality improvement achieved |
+| Initiative_Status | Text | None / Planning / Active |
+
+---
+
+## 🔗 Data Model (Power BI Relationships)
+
+```
+city_light_pollution ──── bortle_scale_reference
+        │  [Bortle_Class → Bortle_Class, Many-to-One]
+        │
+city_light_pollution ──── wildlife_impact
+        │  [City+Year composite, via bridge or filtering]
+        │
+city_light_pollution ──── dark_sky_initiatives
+           [City+Year composite, via bridge or filtering]
+```
+
+**Recommended approach**: Create a `City_Year` calculated column in each table (`= [City] & "|" & [Year]`) and use that as the relationship key.
+
+---
+
+## 📊 Dashboard Pages
+
+### Page 1 — Sky Quality Overview
+- KPI cards: Avg SQM, Avg Bortle Class, Visible Stars, % Cities without Milky Way
+- Line chart: SQM trend by city (2018–2023)
+- Horizontal bar chart: City pollution ranking by brightness
+- Map visual: Bubble map with Bortle class color coding
+
+### Page 2 — Wildlife & Ecological Impact
+- Scatter plot: Light pollution rank vs. wildlife impact score
+- Stacked column: Bird deaths by city
+- Matrix: Insect decline % and bat activity reduction
+- KPI: Annual bird collision deaths (global total)
+
+### Page 3 — Dark Sky Initiatives
+- Progress bars: LED conversion % by city
+- Clustered bar: Energy saved vs. budget allocated
+- Policy status donut: Active / Planning / None
+- Timeline: SQM improvement trend for policy-active cities
+
+### Page 4 — Scenario & What-If Analysis
+- What-If slicer: LED Conversion Target (0–100%)
+- Projected outcome cards: SQM, Energy Saved, Stars Recovered
+- Dark Sky Health Index gauge (composite score)
+- CO₂ savings projection by target LED %
+
+---
+
+## 🧮 Key DAX Measures
+
+```dax
+-- Composite Index (0–100)
+[Dark Sky Health Index] =
+VAR SQM_Weight   = DIVIDE([Avg SQM Score], 22) * 35
+VAR Stars_Weight = DIVIDE([Avg Visible Stars], 4500) * 25
+VAR Wildlife_W   = (10 - [Avg Wildlife Impact Score]) / 10 * 20
+VAR Policy_W     = DIVIDE([Policy Adoption Rate Pct], 100) * 10
+VAR LED_W        = DIVIDE([Avg LED Conversion Pct], 100) * 10
+RETURN (SQM_Weight + Stars_Weight + Wildlife_W + Policy_W + LED_W) * 100
+
+-- What-If Scenario
+[Scenario SQM Projected] =
+VAR TargetLED = 'LED_Conversion_Parm'[LED_Conversion_Parm Value]
+VAR ImprovementPerPct = 0.015
+RETURN [Avg SQM Score] + ((TargetLED - [Avg LED Conversion Pct]) * ImprovementPerPct)
+
+-- Year-over-Year Sky Quality Change
+[SQM YoY Change] =
+VAR CY = MAX(city_light_pollution[Year])
+VAR CV = CALCULATE([Avg SQM Score], city_light_pollution[Year] = CY)
+VAR PV = CALCULATE([Avg SQM Score], city_light_pollution[Year] = CY - 1)
+RETURN IF(NOT ISBLANK(PV), CV - PV, BLANK())
+```
+
+> Full DAX file with 45+ measures is in `/dax/all_measures.dax`
+
+---
+
+## 🚀 How to Run This Project
+
+### Prerequisites
+- Power BI Desktop (free download from Microsoft)
+- Windows OS (required for Power BI Desktop)
+
+### Steps
+
+**1. Load data**
+```
+Open Power BI Desktop
+→ Home → Get Data → Text/CSV
+→ Load all 4 CSV files from /data/
+```
+
+**2. Build relationships (Model View)**
+- Add `City_Year` calculated column in each table
+- Connect: `city_light_pollution[City_Year]` → `wildlife_impact[City_Year]`
+- Connect: `city_light_pollution[City_Year]` → `dark_sky_initiatives[City_Year]`
+- Connect: `city_light_pollution[Bortle_Class]` → `bortle_scale_reference[Bortle_Class]`
+
+**3. Create Date Table**
+```dax
+Date_Table = ADDCOLUMNS(
+    GENERATESERIES(2018, 2023, 1),
+    "Year", [Value],
+    "Decade", IF([Value] < 2020, "2018–2019", "2020–2023")
+)
+```
+
+**4. Add DAX measures**
+- Open `/dax/all_measures.dax`
+- Paste each measure into the relevant table using the Power BI DAX editor
+
+**5. Create What-If parameter**
+```
+Modeling → New Parameter
+Name: LED_Conversion_Parm
+Data type: Decimal Number
+Minimum: 0  |  Maximum: 100  |  Increment: 1  |  Default: 50
+```
+
+**6. Build dashboard pages**
+- Follow the page layout in the "Dashboard Pages" section above
+- Apply conditional formatting using the `[SQM Color HEX]` and `[Wildlife Color HEX]` measures
+
+---
+
+## 💡 Key Insights from the Data
+
+1. **Dubai and Tokyo are the worst offenders** — sky brightness exceeding 5,800+ mcd/m², with only 26–31 stars visible vs. the 4,500 possible in a dark sky
+2. **Reykjavik remains the benchmark** — SQM of 17.8–18.6, 4,250+ visible stars, with 97% LED conversion
+3. **LED conversion ROI is strong** — cities with >60% LED conversion save an average of 630 GWh/year
+4. **Bird deaths are massively underreported** — New York alone sees ~100,000 building collisions annually; this rises to 824,000 across the 13 study cities
+5. **Policy lag is the main problem** — 5 of 13 cities still have no dark sky policy despite clear ROI data
+
+---
+
+## 📎 Data Sources & Methodology
+
+| Dataset | Source |
+|---|---|
+| SQM / Sky Brightness | Globe at Night Citizen Science Program |
+| Bortle Classification | International Dark-Sky Association (IDA) |
+| Energy & CO₂ Estimates | IEA Lighting Market Report |
+| Wildlife Data | IUCN Red List, Fatal Light Awareness Program (FLAP) |
+| LED Conversion | City Government Sustainability Reports |
+
+> **Note**: City-level granularity and multi-year trend data are modelled from real-world ranges and published benchmarks. Exact per-city values are indicative for portfolio demonstration purposes.
+
+---
+
+## 🌐 Real-World Extensions
+
+- Connect to the **Globe at Night API** for live SQM readings
+- Add **satellite VIIRS imagery** via Azure Maps for spatial light pollution layers
+- Build an **automated refresh** pipeline using Power BI Dataflows + Azure Data Factory
+- Extend to **500+ cities** using the Light Pollution Map API (lightpollutionmap.info)
+
+---
+
+## 📄 License
+
+This project is open for portfolio use. Data is modelled from published scientific literature — cite accordingly in academic contexts.
